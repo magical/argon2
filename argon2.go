@@ -25,14 +25,14 @@ functions
 import (
 	"fmt"
 	"hash"
+	"testing"
 
 	"github.com/dchest/blake2b"
 )
 
 const version uint8 = 0x10
-const debug = true
 
-func argon2(output, P, S, K, X []byte, d uint8, m, n uint32) []byte {
+func argon2(output, P, S, K, X []byte, d uint8, m, n uint32, t *testing.T) []byte {
 	if d != 1 {
 		panic("argon: parallelism not supported")
 	}
@@ -55,10 +55,12 @@ func argon2(output, P, S, K, X []byte, d uint8, m, n uint32) []byte {
 	h.Sum(buf[:0])
 	h.Reset()
 
-	fmt.Printf("Iterations: %d, Memory: %d KiBytes, Parallelism: %d lanes, Tag length: %d bytes\n", n, m, d, len(output))
-	fmt.Printf("Message: % x\n", P)
-	fmt.Printf("Nonce: % x\n", S)
-	fmt.Printf("Input hash: % x\n", buf[:64])
+	if t != nil {
+		t.Logf("Iterations: %d, Memory: %d KiBytes, Parallelism: %d lanes, Tag length: %d bytes", n, m, d, len(output))
+		t.Logf("Message: % x", P)
+		t.Logf("Nonce: % x", S)
+		t.Logf("Input hash: % x", buf[:64])
+	}
 
 	// [128]uint64 is 1024 bytes
 	b := make([][128]uint64, m)
@@ -143,17 +145,17 @@ func argon2(output, P, S, K, X []byte, d uint8, m, n uint32) []byte {
 				panic("")
 			}
 
-			if debug {
-				fmt.Printf("prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, j = %d\n", prev, rand, cut0, cut1, max, j0)
+			if t != nil {
+				t.Logf("prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, j = %d", prev, rand, cut0, cut1, max, j0)
 			}
 
 			block(&b[j], &b[prev], &b[j0])
 		}
-		if debug {
-			fmt.Println()
-			fmt.Printf(" After pass %d:\n", k)
+		if t != nil {
+			t.Log()
+			t.Logf(" After pass %d:", k)
 			for i := range b {
-				fmt.Printf("  Block %.4d [0]: %x\n", i, b[i][0])
+				t.Logf("  Block %.4d [0]: %x", i, b[i][0])
 			}
 		}
 	}
@@ -166,8 +168,8 @@ func argon2(output, P, S, K, X []byte, d uint8, m, n uint32) []byte {
 		write64(h, v)
 	}
 	h.Sum(output[:0])
-	if debug {
-		fmt.Printf("Output: % X\n", output)
+	if t != nil {
+		t.Logf("Output: % X", output)
 	}
 	return output
 }
