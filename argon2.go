@@ -84,7 +84,6 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 				_ = seg
 				j := lane*q + slice*q4
 				if k == 0 && slice == 0 {
-					t.Log(slice, lane, i, j)
 					buf[64] = 0
 					buf[68] = uint8(lane)
 					buf[69] = uint8(lane >> 8)
