@@ -23,7 +23,6 @@ functions
 */
 
 import (
-	"fmt"
 	"hash"
 	"testing"
 
@@ -32,12 +31,13 @@ import (
 
 const version uint8 = 0x10
 
-func argon2(output, P, S, K, X []byte, d uint8, m, n uint32, t *testing.T) []byte {
-	if d != 1 {
-		panic("argon: parallelism not supported")
+func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
+	if m%(d*4) != 0 {
+		panic("argon: invalid memory parameter")
 	}
 	h := blake2b.New512()
-	write8(h, d)
+	// TODO check lengths and ranges
+	write8(h, uint8(d))
 	write32(h, uint32(len(output)))
 	write32(h, m)
 	write32(h, n)
@@ -62,108 +62,154 @@ func argon2(output, P, S, K, X []byte, d uint8, m, n uint32, t *testing.T) []byt
 		t.Logf("Input hash: % x", buf[:64])
 	}
 
-	// [128]uint64 is 1024 bytes
+	// Argon2 operates over a matrix of 1024-byte blocks
+	// The matrix is divided into lanes, slices, and segments.
 	b := make([][128]uint64, m)
+
 	var h0 [1024]byte
 
-	q := m / uint32(d)
+	q := m / d
+	q4 := q / 4
 	for k := uint32(0); k < n; k++ {
-		var i uint32
-		var start uint32
-		if k == 0 {
-			buf[64] = 0
-			buf[68] = uint8(i)
-			buf[69] = uint8(i>>8)
-			buf[70] = uint8(i>>16)
-			buf[71] = uint8(i>>24)
-			blake2b_long(h0[:], buf[:72])
-			for i := range b[0] {
-				b[0][i] = read64(h0[i*8:])
-			}
-
-			buf[64] = 1
-			blake2b_long(h0[:], buf[:72])
-			for i := range b[1] {
-				b[1][i] = read64(h0[i*8:])
-			}
-			start = 2
-		}
-		for j := start; j < q; j++ {
-			prev := j - 1
-			if j == 0 {
-				prev = q - 1
-			}
-			// Each block is computed from the previous block
-			// and a random other block.
-			// But there are restrictions on which blocks we can
-			// use, so we have to perform the most awkward index
-			// calculation ever.
-			s := j / (q / 4)
-			var j0, cut0, cut1, max uint32
-
-			first := j == s*(q/4)
-
-			if k == 0 {
-				// All blocks before the current slice
-				max += (q / 4) * s
-				cut0 = max
-				cut1 = max
-			} else {
-				// All blocks not in the current slice
-				max += (q / 4) * 3
-				cut0 = (q / 4) * s
-				cut1 = max
-			}
-
-			// All blocks in the current segment except the previous
-			max += j - s*(q/4) - 1
-
-			var extra uint32
-			if first && s != 0 {
-				// The first block in a segment
-				// cannot reference the last block of any lane
-				cut0 -= 1
-				cut1 -= 1
-				extra = 1
-			}
-
-			rand := uint32(b[prev][0])
-			j0 = rand % max
-			// TODO slices are enumerated first in the p direction.
-			// As if the matrix were [4][p][q/4]block
-			if j0 < cut0 {
-				j0 += 0
-			} else if j0 < cut1 {
-				j0 += q / 4 + extra
-			} else {
-				j0 = j0 - cut1 + (s * (q / 4))
-			}
-
-			if j0 > q {
-				fmt.Println("i, j, q, s, cut0, cut1, max, rand, j0")
-				fmt.Println(i, j, q, s, cut0, cut1, max, rand, j0)
-				panic("")
-			}
-
-			if t != nil {
-				t.Logf("prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, j = %d", prev, rand, cut0, cut1, max, j0)
-			}
-
-			block(&b[j], &b[prev], &b[j0])
-		}
 		if t != nil {
 			t.Log()
 			t.Logf(" After pass %d:", k)
+		}
+		//for s := uint32(0); s < 4; s++ {
+		for slice := uint32(0); slice < 4; slice++ {
+			//for i := uint32(0); i < d; i++ {
+			for lane := uint32(0); lane < d; lane++ {
+				i := uint32(0)
+				seg := lane*q + slice*q4
+				_ = seg
+				j := lane*q + slice*q4
+				if k == 0 && slice == 0 {
+					t.Log(slice, lane, i, j)
+					buf[64] = 0
+					buf[68] = uint8(lane)
+					buf[69] = uint8(lane >> 8)
+					buf[70] = uint8(lane >> 16)
+					buf[71] = uint8(lane >> 24)
+					blake2b_long(h0[:], buf[:72])
+					for i := range b[j+0] {
+						b[j+0][i] = read64(h0[i*8:])
+					}
+
+					buf[64] = 1
+					blake2b_long(h0[:], buf[:72])
+					for i := range b[j+1] {
+						b[j+1][i] = read64(h0[i*8:])
+					}
+					i = 2
+					j += 2
+				}
+				for ; i < q4; i, j = i+1, j+1 {
+					prev := j - 1
+					if i == 0 && slice == 0 {
+						prev = lane*q + q - 1
+					}
+					// Each block is computed from the previous block
+					// and a random other block.
+					// But there are restrictions on which blocks we can
+					// use, so we have to perform the most awkward index
+					// calculation ever.
+					var j0, cut0, cut1, max uint32
+
+					if k == 0 {
+						// All blocks before the current slice
+						max += q4 * slice * d
+						cut0 = max
+						cut1 = max
+					} else {
+						// All blocks not in the current slice
+						max += q4 * 3 * d
+						cut0 = q4 * slice * d
+						cut1 = max
+					}
+					// All blocks in the current segment before the current block
+					// except the immediately prior block
+					if i != 0 {
+						max += i - 1
+					}
+
+					if i == 0 {
+						// The first block in a segment
+						// cannot reference the last block of any lane
+						if cut0 > d {
+							cut0 -= d
+						}
+						cut1 -= d
+						max -= d
+					}
+
+					rand := uint32(b[prev][0])
+					j0 = rand % max
+					// Note: for the following index calculation,
+					// blocks are enumerated first by slice, then by lane, then by block,
+					// as if the matrix were [4][p][q/4]block
+					var rslice, rlane, ri uint32
+					if j0 < cut0 {
+						// nothing
+						rslice = j0 / (q4 * d)
+						if i == 0 && rslice == slice-1 {
+							j0 -= rslice * q4 * d
+							rlane = j0 / (q4 - 1) % d
+							ri = j0 % (q4 - 1)
+						} else {
+							rlane = j0 / q4 % d
+							ri = j0 % q4
+						}
+						j0 = rlane*q + rslice*q4 + ri
+					} else if j0 < cut1 {
+						//j0 = j0 - cut0 + (slice+1)*q4
+						j0 -= cut0
+						rslice = j0 / (q4 * d)
+						if i == 0 && slice == 0 && rslice == 3 {
+							j0 -= rslice * q4 * d
+							rlane = j0 / (q4 - 1) % d
+							ri = j0 % (q4 - 1)
+						} else {
+							rlane = j0 / q4 % d
+							ri = j0 % q4
+						}
+						rslice += slice + 1
+						j0 = rlane*q + rslice*q4 + ri
+					} else {
+						j0 = j0 - cut1 + lane*q + slice*q4
+						rslice = slice
+						rlane = lane
+						ri = j0 - cut1
+					}
+
+					if t != nil {
+						t.Logf("  i = %d, prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, orig = %d, j = %d(%d,%d,%d)", j, prev, rand, cut0, cut1, max, rand%max, j0, rlane, rslice, ri)
+					}
+
+					if j0 > m {
+						panic("argon: bad j0")
+					}
+
+					block(&b[j], &b[prev], &b[j0])
+				}
+			}
+		}
+		if t != nil {
 			for i := range b {
 				t.Logf("  Block %.4d [0]: %x", i, b[i][0])
 			}
 		}
 	}
+
 	h, err := blake2b.New(&blake2b.Config{Size: uint8(len(output))})
 	if err != nil {
 		panic(err)
 	}
 	write32(h, uint32(len(output)))
+	for lane := uint32(0); lane < d-1; lane++ {
+		for i, v := range b[lane*q+q-1] {
+			b[m-1][i] ^= v
+		}
+	}
 	for _, v := range b[m-1] {
 		write64(h, v)
 	}
@@ -216,7 +262,7 @@ func index(k, i, j, r, s, p, q uint32) {
 func block(z, a, b *[128]uint64) {
 	// .,+16dread !python round.py
 	for i := range z {
-		z[i] = a[i]^b[i]
+		z[i] = a[i] ^ b[i]
 	}
 
 	for i := 0; i < 128; i += 16 {
