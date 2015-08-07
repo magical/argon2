@@ -108,33 +108,36 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 					if i == 0 && slice == 0 {
 						prev = lane*q + q - 1
 					}
-					// Each block is computed from the previous block
-					// and a random other block.
-					// But there are restrictions on which blocks we can
-					// use, so we have to perform the most awkward index
-					// calculation ever.
-					var j0, cut0, cut1, max uint32
 
+					// Each block is computed from the previous block
+					// and a random block.
+					//
+					// There are restrictions on the random block,
+					// leading to gaps in the selection, leading to
+					// the following incredibly awkward calculations.
+
+					var j0, cut0, cut1, max uint32
 					if k == 0 {
-						// All blocks before the current slice
+						// 1. First pass: include all blocks before the current slice
 						max += q4 * slice * d
 						cut0 = max
 						cut1 = max
 					} else {
-						// All blocks not in the current slice
+						// 2. Later passes: include all blocks not in the current slice
 						max += q4 * 3 * d
 						cut0 = q4 * slice * d
 						cut1 = max
 					}
-					// All blocks in the current segment before the current block
+					// 3. Include all blocks in the current segment (before the current block)
 					// except the immediately prior block
 					if i != 0 {
 						max += i - 1
 					}
 
 					if i == 0 {
-						// The first block in a segment
-						// cannot reference the last block of any lane
+						// 4. For the first block of each segment,
+						// exclude the last block of every lane
+						// in the previous slice.
 						if cut0 > d {
 							cut0 -= d
 						}
@@ -144,12 +147,12 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 
 					rand := uint32(b[prev][0])
 					j0 = rand % max
-					// Note: for the following index calculation,
-					// blocks are enumerated first by slice, then by lane, then by block,
-					// as if the matrix were [4][p][q/4]block
+
+					// Now that we've selected the block, figure out where it actually is.
+					// Blocks are enumerated by slice, then lane, then block,
+					// as if the matrix were [4][d][q/4]block.
 					var rslice, rlane, ri uint32
 					if j0 < cut0 {
-						// nothing
 						rslice = j0 / (q4 * d)
 						if i == 0 && rslice == slice-1 {
 							j0 -= rslice * q4 * d
@@ -161,7 +164,6 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 						}
 						j0 = rlane*q + rslice*q4 + ri
 					} else if j0 < cut1 {
-						//j0 = j0 - cut0 + (slice+1)*q4
 						j0 -= cut0
 						rslice = j0 / (q4 * d)
 						if i == 0 && slice == 0 && rslice == 3 {
@@ -186,7 +188,7 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 					}
 
 					if j0 > m {
-						panic("argon: bad j0")
+						panic("argon: internal error: bad j0")
 					}
 
 					block(&b[j], &b[prev], &b[j0])
