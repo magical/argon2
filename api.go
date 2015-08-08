@@ -19,17 +19,17 @@ const (
 //
 // The salt must be at least 8 bytes long.
 func Key(password, salt []byte, n, par int, mem int64, keyLen int) ([]byte, error) {
-	if len(password) > maxPassword {
+	if int64(len(password)) > maxPassword {
 		return nil, errors.New("argon: password too long")
 	}
 
 	if len(salt) < minSalt {
 		return nil, errors.New("argon: salt too short")
-	} else if len(salt) > maxSalt {
+	} else if int64(len(salt)) > maxSalt {
 		return nil, errors.New("argon: salt too long")
 	}
 
-	if n < 1 || n > maxIter {
+	if n < 1 || int64(n) > maxIter {
 		return nil, errors.New("argon: invalid n")
 	}
 
