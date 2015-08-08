@@ -104,81 +104,9 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 						prev = lane*q + q - 1
 					}
 
-					// Each block is computed from the previous block
-					// and a random block.
-					//
-					// There are restrictions on the random block,
-					// leading to gaps in the selection, leading to
-					// the following incredibly awkward calculations.
-
-					var j0, cut0, cut1, max uint32
-					if k == 0 {
-						// 1. First pass: include all blocks before the current slice
-						max += g * slice * d
-						cut0 = max
-						cut1 = max
-					} else {
-						// 2. Later passes: include all blocks not in the current slice
-						max += g * 3 * d
-						cut0 = g * slice * d
-						cut1 = max
-					}
-					// 3. Include all blocks in the current segment (before the current block)
-					// except the immediately prior block
-					if i != 0 {
-						max += i - 1
-					}
-
-					if i == 0 {
-						// 4. For the first block of each segment,
-						// exclude the last block of every lane
-						// in the previous slice.
-						if cut0 > d {
-							cut0 -= d
-						}
-						cut1 -= d
-						max -= d
-					}
-
 					rand := uint32(b[prev][0])
-					j0 = rand % max
-
-					// Now that we've selected the block, figure out where it actually is.
-					// Blocks are enumerated by slice, then lane, then block,
-					// as if the matrix were [4][d][q/4]block.
-					var rslice, rlane, ri uint32
-					if j0 < cut0 {
-						rslice = j0 / (g * d)
-						if i == 0 && rslice == slice-1 {
-							j0 -= rslice * g * d
-							rlane = j0 / (g - 1) % d
-							ri = j0 % (g - 1)
-						} else {
-							rlane = j0 / g % d
-							ri = j0 % g
-						}
-					} else if j0 < cut1 {
-						j0 -= cut0
-						rslice = j0 / (g * d)
-						rslice += slice + 1
-						if i == 0 && slice == 0 && rslice == 3 {
-							j0 -= 2 * g * d
-							rlane = j0 / (g - 1) % d
-							ri = j0 % (g - 1)
-						} else {
-							rlane = j0 / g % d
-							ri = j0 % g
-						}
-					} else {
-						rslice = slice
-						rlane = lane
-						ri = j0 - cut1
-					}
-					j0 = rlane*q + rslice*g + ri
-
-					if t != nil {
-						t.Logf("  i = %d, prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, orig = %d, j = %d(%d,%d,%d)", j, prev, rand, cut0, cut1, max, rand%max, j0, rlane, rslice, ri)
-					}
+					rslice, rlane, ri := index(rand, q, g, d, k, slice, lane, i)
+					j0 := rlane*q + rslice*g + ri
 
 					if j0 > m {
 						panic("argon: internal error: bad j0")
@@ -213,6 +141,78 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 		t.Logf("Output: % X", output)
 	}
 	return output
+}
+
+func index(rand, q, g, d, k, slice, lane, i uint32) (rslice, rlane, ri uint32) {
+	// Each block is computed from the previous block
+	// and a random block.
+	//
+	// There are restrictions on the random block,
+	// leading to gaps in the selection, leading to
+	// the following incredibly awkward calculations.
+
+	var cut0, cut1, max uint32
+	if k == 0 {
+		// 1. First pass: include all blocks before the current slice
+		cut0 = slice * g * d
+		cut1 = cut0
+	} else {
+		// 2. Later passes: include all blocks not in the current slice
+		cut0 = slice * g * d
+		cut1 = 3 * g * d
+	}
+	if i != 0 {
+		// 3. Include all blocks in the current segment (before the current block)
+		// except the immediately prior block
+		max = cut1 + i - 1
+	} else {
+		// 4. For the first block of each segment,
+		// exclude the last block of every lane
+		// of the previous slice.
+		if slice > 0 {
+			cut0 -= d
+		}
+		cut1 -= d
+		max = cut1
+	}
+
+	// Now that we've selected the block, figure out where it actually is.
+	// Blocks are enumerated by slice, then lane, then block,
+	// as if b were [4][d][q/4]block.
+	j := rand % max
+
+	if j < cut1 {
+		if j < cut0 {
+			rslice = j / (g * d)
+		} else {
+			j -= cut0
+			rslice = j / (g * d) + slice + 1
+		}
+		if i == 0 && rslice == slice-1 {
+			j -= rslice * g * d
+			rlane = j / (g - 1) % d
+			ri = j % (g - 1)
+		} else if i == 0 && slice == 0 && rslice == 3 {
+			j -= 2 * g * d
+			rlane = j / (g - 1) % d
+			ri = j % (g - 1)
+		} else {
+			rlane = j / g % d
+			ri = j % g
+		}
+	} else {
+		rslice = slice
+		rlane = lane
+		ri = j - cut1
+	}
+
+	/*
+	if t != nil {
+		t.Logf("  i = %d, prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, orig = %d, j = %d(%d,%d,%d)", j, prev, rand, cut0, cut1, max, rand%max, j0, rlane, rslice, ri)
+	}
+	*/
+
+	return rslice, rlane, ri
 }
 
 func blake2b_long(out, in []byte) {
