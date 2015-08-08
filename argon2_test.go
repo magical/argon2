@@ -23,6 +23,12 @@ func TestArgon_100KB(t *testing.T) {
 func TestArgon_16KB_P2(t *testing.T) {
 	testArgon(t, 2, 16, [8]byte{0xcb, 0x85, 0x0e, 0x0f, 0xc4, 0xa1, 0xd0, 0x9d})
 }
+func TestArgon_128KB_P16(t *testing.T) {
+	testArgon(t, 16, 128, [8]byte{0x5a, 0x52, 0x9a, 0x86, 0xad, 0x14, 0x02, 0xb2})
+}
+func TestArgon_512KB_P64(t *testing.T) {
+	testArgon(t, 64, 512, [8]byte{0xf3, 0x30, 0x6e, 0xa7, 0x00, 0x9a, 0xe1, 0xc1})
+}
 
 func benchArgon(b *testing.B, par uint8, mem, n uint32) {
 	var msg [16]byte

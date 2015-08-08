@@ -157,26 +157,24 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 							rlane = j0 / g % d
 							ri = j0 % g
 						}
-						j0 = rlane*q + rslice*g + ri
 					} else if j0 < cut1 {
 						j0 -= cut0
 						rslice = j0 / (g * d)
+						rslice += slice + 1
 						if i == 0 && slice == 0 && rslice == 3 {
-							j0 -= rslice * g * d
+							j0 -= 2 * g * d
 							rlane = j0 / (g - 1) % d
 							ri = j0 % (g - 1)
 						} else {
 							rlane = j0 / g % d
 							ri = j0 % g
 						}
-						rslice += slice + 1
-						j0 = rlane*q + rslice*g + ri
 					} else {
-						j0 = j0 - cut1 + lane*q + slice*g
 						rslice = slice
 						rlane = lane
 						ri = j0 - cut1
 					}
+					j0 = rlane*q + rslice*g + ri
 
 					if t != nil {
 						t.Logf("  i = %d, prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, orig = %d, j = %d(%d,%d,%d)", j, prev, rand, cut0, cut1, max, rand%max, j0, rlane, rslice, ri)
