@@ -33,7 +33,7 @@ func benchArgon(b *testing.B, par uint8, mem, n uint32) {
 	}
 }
 
-func BenchmarkArgon_8KB_1N(b *testing.B)   { benchArgon(b, 1, 8, 3) }
+func BenchmarkArgon_8KB_3N(b *testing.B)   { benchArgon(b, 1, 8, 3) }
 func BenchmarkArgon_8KB_100N(b *testing.B) { benchArgon(b, 1, 8, 100) }
 func BenchmarkArgon_128KB_1P(b *testing.B) { benchArgon(b, 1, 128, 3) }
 func BenchmarkArgon_128KB_4P(b *testing.B) { benchArgon(b, 4, 128, 3) }

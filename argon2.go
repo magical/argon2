@@ -33,7 +33,7 @@ const version uint8 = 0x10
 
 func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 	if m%(d*4) != 0 {
-		panic("argon: invalid memory parameter")
+		panic("argon: internal error: invalid m")
 	}
 	h := blake2b.New512()
 	// TODO check lengths and ranges
@@ -69,20 +69,16 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 	var h0 [1024]byte
 
 	q := m / d
-	q4 := q / 4
+	g := q / 4
 	for k := uint32(0); k < n; k++ {
 		if t != nil {
 			t.Log()
 			t.Logf(" After pass %d:", k)
 		}
-		//for s := uint32(0); s < 4; s++ {
 		for slice := uint32(0); slice < 4; slice++ {
-			//for i := uint32(0); i < d; i++ {
 			for lane := uint32(0); lane < d; lane++ {
 				i := uint32(0)
-				seg := lane*q + slice*q4
-				_ = seg
-				j := lane*q + slice*q4
+				j := lane*q + slice*g
 				if k == 0 && slice == 0 {
 					buf[64] = 0
 					buf[68] = uint8(lane)
@@ -102,7 +98,7 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 					i = 2
 					j += 2
 				}
-				for ; i < q4; i, j = i+1, j+1 {
+				for ; i < g; i, j = i+1, j+1 {
 					prev := j - 1
 					if i == 0 && slice == 0 {
 						prev = lane*q + q - 1
@@ -118,13 +114,13 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 					var j0, cut0, cut1, max uint32
 					if k == 0 {
 						// 1. First pass: include all blocks before the current slice
-						max += q4 * slice * d
+						max += g * slice * d
 						cut0 = max
 						cut1 = max
 					} else {
 						// 2. Later passes: include all blocks not in the current slice
-						max += q4 * 3 * d
-						cut0 = q4 * slice * d
+						max += g * 3 * d
+						cut0 = g * slice * d
 						cut1 = max
 					}
 					// 3. Include all blocks in the current segment (before the current block)
@@ -152,31 +148,31 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 					// as if the matrix were [4][d][q/4]block.
 					var rslice, rlane, ri uint32
 					if j0 < cut0 {
-						rslice = j0 / (q4 * d)
+						rslice = j0 / (g * d)
 						if i == 0 && rslice == slice-1 {
-							j0 -= rslice * q4 * d
-							rlane = j0 / (q4 - 1) % d
-							ri = j0 % (q4 - 1)
+							j0 -= rslice * g * d
+							rlane = j0 / (g - 1) % d
+							ri = j0 % (g - 1)
 						} else {
-							rlane = j0 / q4 % d
-							ri = j0 % q4
+							rlane = j0 / g % d
+							ri = j0 % g
 						}
-						j0 = rlane*q + rslice*q4 + ri
+						j0 = rlane*q + rslice*g + ri
 					} else if j0 < cut1 {
 						j0 -= cut0
-						rslice = j0 / (q4 * d)
+						rslice = j0 / (g * d)
 						if i == 0 && slice == 0 && rslice == 3 {
-							j0 -= rslice * q4 * d
-							rlane = j0 / (q4 - 1) % d
-							ri = j0 % (q4 - 1)
+							j0 -= rslice * g * d
+							rlane = j0 / (g - 1) % d
+							ri = j0 % (g - 1)
 						} else {
-							rlane = j0 / q4 % d
-							ri = j0 % q4
+							rlane = j0 / g % d
+							ri = j0 % g
 						}
 						rslice += slice + 1
-						j0 = rlane*q + rslice*q4 + ri
+						j0 = rlane*q + rslice*g + ri
 					} else {
-						j0 = j0 - cut1 + lane*q + slice*q4
+						j0 = j0 - cut1 + lane*q + slice*g
 						rslice = slice
 						rlane = lane
 						ri = j0 - cut1
