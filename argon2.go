@@ -1,27 +1,5 @@
 package argon
 
-/*
-
-inputs:
-
- P message
- S nonce
-
- d parallelism
- t "tag" length (output length)
- m memory size
- n iterations
- v version number
- K secret value
- X associated data
-
-functions
-
- H the Blake2b hash function
- G compression function
-
-*/
-
 import (
 	"hash"
 	"testing"
@@ -31,12 +9,39 @@ import (
 
 const version uint8 = 0x10
 
+/*
+
+inputs:
+
+ P message
+ S nonce
+ K secret key (optional)
+ X associated data (optional)
+
+ d parallelism
+ m memory size
+ n iterations
+
+*/
+
 func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
+	if d == 0 || m == 0 || n == 0 {
+		panic("argon: internal error: invalid params")
+	}
 	if m%(d*4) != 0 {
 		panic("argon: internal error: invalid m")
 	}
+
+	// Argon2 operates over a matrix of 1024-byte blocks
+	b := make([][128]uint64, m)
+	q := m / d
+	g := q / 4
+
+	// Compute a hash of all the input parameters
+	var buf [72]byte
+	var h0 [1024]byte
+
 	h := blake2b.New512()
-	// TODO check lengths and ranges
 	write8(h, uint8(d))
 	write32(h, uint32(len(output)))
 	write32(h, m)
@@ -50,26 +55,41 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 	h.Write(K)
 	write32(h, uint32(len(X)))
 	h.Write(X)
-
-	var buf [72]byte
 	h.Sum(buf[:0])
 	h.Reset()
 
+	// Use the hash to initialize the first two columns of the matrix
+	for lane := uint32(0); lane < d; lane++ {
+		buf[68] = uint8(lane)
+		buf[69] = uint8(lane >> 8)
+		buf[70] = uint8(lane >> 16)
+		buf[71] = uint8(lane >> 24)
+
+		buf[64] = 0
+		blake2b_long(h0[:], buf[:72])
+		for i := range b[0] {
+			b[lane*q+0][i] = read64(h0[i*8:])
+		}
+
+		buf[64] = 1
+		blake2b_long(h0[:], buf[:72])
+		for i := range b[0] {
+			b[lane*q+1][i] = read64(h0[i*8:])
+		}
+	}
+
 	if t != nil {
-		t.Logf("Iterations: %d, Memory: %d KiBytes, Parallelism: %d lanes, Tag length: %d bytes", n, m, d, len(output))
+		t.Logf("Iterations: %d, Memory: %d KiB, Parallelism: %d lanes, Tag length: %d bytes", n, m, d, len(output))
 		t.Logf("Message: % x", P)
 		t.Logf("Nonce: % x", S)
 		t.Logf("Input hash: % x", buf[:64])
 	}
 
-	// Argon2 operates over a matrix of 1024-byte blocks
-	// The matrix is divided into lanes, slices, and segments.
-	b := make([][128]uint64, m)
+	for i := range buf {
+		buf[i] = 0
+	}
 
-	var h0 [1024]byte
-
-	q := m / d
-	g := q / 4
+	// Get down to business
 	for k := uint32(0); k < n; k++ {
 		if t != nil {
 			t.Log()
@@ -78,26 +98,10 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 		for slice := uint32(0); slice < 4; slice++ {
 			for lane := uint32(0); lane < d; lane++ {
 				i := uint32(0)
-				j := lane*q + slice*g
 				if k == 0 && slice == 0 {
-					buf[64] = 0
-					buf[68] = uint8(lane)
-					buf[69] = uint8(lane >> 8)
-					buf[70] = uint8(lane >> 16)
-					buf[71] = uint8(lane >> 24)
-					blake2b_long(h0[:], buf[:72])
-					for i := range b[j+0] {
-						b[j+0][i] = read64(h0[i*8:])
-					}
-
-					buf[64] = 1
-					blake2b_long(h0[:], buf[:72])
-					for i := range b[j+1] {
-						b[j+1][i] = read64(h0[i*8:])
-					}
 					i = 2
-					j += 2
 				}
+				j := lane*q + slice*g + i
 				for ; i < g; i, j = i+1, j+1 {
 					prev := j - 1
 					if i == 0 && slice == 0 {
@@ -107,10 +111,6 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 					rand := uint32(b[prev][0])
 					rslice, rlane, ri := index(rand, q, g, d, k, slice, lane, i)
 					j0 := rlane*q + rslice*g + ri
-
-					if j0 > m {
-						panic("argon: internal error: bad j0")
-					}
 
 					block(&b[j], &b[prev], &b[j0])
 				}
@@ -123,16 +123,19 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 		}
 	}
 
-	h, err := blake2b.New(&blake2b.Config{Size: uint8(len(output))})
-	if err != nil {
-		panic(err)
-	}
-	write32(h, uint32(len(output)))
+	// XOR the blocks in the last column together
 	for lane := uint32(0); lane < d-1; lane++ {
 		for i, v := range b[lane*q+q-1] {
 			b[m-1][i] ^= v
 		}
 	}
+
+	// Output
+	h, err := blake2b.New(&blake2b.Config{Size: uint8(len(output))})
+	if err != nil {
+		panic(err)
+	}
+	write32(h, uint32(len(output)))
 	for _, v := range b[m-1] {
 		write64(h, v)
 	}
@@ -186,7 +189,7 @@ func index(rand, q, g, d, k, slice, lane, i uint32) (rslice, rlane, ri uint32) {
 			rslice = j / (g * d)
 		} else {
 			j -= cut0
-			rslice = j / (g * d) + slice + 1
+			rslice = j/(g*d) + slice + 1
 		}
 		if i == 0 && rslice == slice-1 {
 			j -= rslice * g * d
@@ -206,11 +209,9 @@ func index(rand, q, g, d, k, slice, lane, i uint32) (rslice, rlane, ri uint32) {
 		ri = j - cut1
 	}
 
-	/*
-	if t != nil {
-		t.Logf("  i = %d, prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, orig = %d, j = %d(%d,%d,%d)", j, prev, rand, cut0, cut1, max, rand%max, j0, rlane, rslice, ri)
-	}
-	*/
+	//if t != nil {
+	//	t.Logf("  i = %d, prev = %d, rand = %d, cut0 = %d, cut1 = %d, max = %d, orig = %d, j = %d(%d,%d,%d)", j, prev, rand, cut0, cut1, max, rand%max, j0, rlane, rslice, ri)
+	//}
 
 	return rslice, rlane, ri
 }
