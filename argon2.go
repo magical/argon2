@@ -131,15 +131,17 @@ func argon2(output, P, S, K, X []byte, d, m, n uint32, t *testing.T) []byte {
 	}
 
 	// Output
-	h, err := blake2b.New(&blake2b.Config{Size: uint8(len(output))})
-	if err != nil {
-		panic(err)
+	for i, v := range b[m-1] {
+		h0[i*8] = uint8(v)
+		h0[i*8+1] = uint8(v>>8)
+		h0[i*8+2] = uint8(v>>16)
+		h0[i*8+3] = uint8(v>>24)
+		h0[i*8+4] = uint8(v>>32)
+		h0[i*8+5] = uint8(v>>40)
+		h0[i*8+6] = uint8(v>>48)
+		h0[i*8+7] = uint8(v>>56)
 	}
-	write32(h, uint32(len(output)))
-	for _, v := range b[m-1] {
-		write64(h, v)
-	}
-	h.Sum(output[:0])
+	blake2b_long(output, h0[:])
 	if t != nil {
 		t.Logf("Output: % X", output)
 	}
@@ -217,6 +219,17 @@ func index(rand, q, g, d, k, slice, lane, i uint32) (rslice, rlane, ri uint32) {
 }
 
 func blake2b_long(out, in []byte) {
+	if len(out) < blake2b.Size {
+		h, err := blake2b.New(&blake2b.Config{Size: uint8(len(out))})
+		if err != nil {
+			panic(err)
+		}
+		write32(h, uint32(len(out)))
+		h.Write(in)
+		h.Sum(out[:0])
+		return
+	}
+
 	var buf [64]byte
 	h := blake2b.New512()
 	h.Reset()
