@@ -50,7 +50,7 @@ func TestKeyErr(t *testing.T) {
 	if err == nil {
 		t.Errorf("got nil error, expected %q", want)
 	} else if !strings.Contains(err.Error(), want) {
-		t.Errorf("got %q, expected %q", want)
+		t.Errorf("got %q, expected %q", err, want)
 	}
 
 	want = "invalid par"
@@ -58,6 +58,6 @@ func TestKeyErr(t *testing.T) {
 	if err == nil {
 		t.Errorf("got nil error, expected %q", want)
 	} else if !strings.Contains(err.Error(), want) {
-		t.Errorf("got %q, expected %q", want)
+		t.Errorf("got %q, expected %q", err, want)
 	}
 }
