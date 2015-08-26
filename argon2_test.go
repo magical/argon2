@@ -1,4 +1,4 @@
-package argon
+package argon2
 
 import (
 	"testing"

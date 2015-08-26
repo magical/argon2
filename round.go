@@ -1,4 +1,4 @@
-package argon
+package argon2
 
 func block(z, a, b *[128]uint64) {
 	var v0 uint64

@@ -1,4 +1,4 @@
-print("package argon")
+print("package argon2")
 print()
 print("func block(z, a, b *[128]uint64) {")
 

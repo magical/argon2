@@ -1,4 +1,4 @@
-// Package argon implements the Argon2 password hashing function as specified
+// Package argon2 implements the Argon2 password hashing function as specified
 // in the document
 //
 //     https://password-hashing.net/submissions/specs/Argon-v3.pdf
@@ -9,7 +9,7 @@
 //
 // Argon2d uses data-dependent memory access, making it not suitable for hashing secret information due to potential side-channel attacks.
 //
-package argon
+package argon2
 
 import "errors"
 
