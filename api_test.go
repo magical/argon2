@@ -18,7 +18,7 @@ func ExampleKey() {
 	pw := []byte("hunter2")
 	salt := randomSalt()
 
-	key, err := Key(pw, salt, 3, 1, 8192, 32)
+	key, err := Key(pw, salt, 3, 1, 8, 32)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -46,7 +46,7 @@ func TestKeyErr(t *testing.T) {
 	salt := ones[:]
 
 	want := "salt too short"
-	_, err := Key(pw, salt[:1], 3, 1, 8192, 8)
+	_, err := Key(pw, salt[:1], 3, 1, 8, 8)
 	if err == nil {
 		t.Errorf("got nil error, expected %q", want)
 	} else if !strings.Contains(err.Error(), want) {
@@ -54,7 +54,7 @@ func TestKeyErr(t *testing.T) {
 	}
 
 	want = "invalid par"
-	_, err = Key(pw, salt, 3, 100, 8192, 8)
+	_, err = Key(pw, salt, 3, 100, 8, 8)
 	if err == nil {
 		t.Errorf("got nil error, expected %q", want)
 	} else if !strings.Contains(err.Error(), want) {
