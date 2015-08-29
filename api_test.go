@@ -25,20 +25,7 @@ func ExampleKey() {
 	}
 
 	fmt.Printf("%x", key)
-	// Output: bd870ac43992d3709273f626141da5b7958a595a041326f153e9a9cc013fe6c4
-}
-
-var errorTests = []struct {
-	pw   []byte
-	salt []byte
-	n    int
-	mem  int
-	par  int
-	err  string
-}{
-	{
-		pw: zeros[:1],
-	},
+	// Output: c15a7a43959a834f77714805434799ca8efdeb26ad0e1acda206af846a5cef29
 }
 
 func TestKeyErr(t *testing.T) {
@@ -54,7 +41,7 @@ func TestKeyErr(t *testing.T) {
 	}
 
 	want = "invalid par"
-	_, err = Key(pw, salt, 3, 100, 8, 8)
+	_, err = Key(pw, salt, 3, 256, 8, 8)
 	if err == nil {
 		t.Errorf("got nil error, expected %q", want)
 	} else if !strings.Contains(err.Error(), want) {

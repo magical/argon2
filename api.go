@@ -1,20 +1,14 @@
 // Package argon2 implements the Argon2 password hashing function as specified
 // in the document
 //
-//     https://password-hashing.net/submissions/specs/Argon-v3.pdf
-//
-// Argon2 comes in two flavors:
-//
-// Argon2i uses data-independent memory access, making it suitable for hashing secret information such as passwords.
-//
-// Argon2d uses data-dependent memory access, making it not suitable for hashing secret information due to potential side-channel attacks.
+//     https://github.com/khovratovich/Argon2/raw/d9304a5ecac9fc5b47befd25cbfce6ed026042fe/Argon2.pdf
 //
 package argon2
 
 import "errors"
 
 const (
-	maxPar = 64
+	maxPar = 255
 
 	maxIter = 1<<32 - 1
 

@@ -3,16 +3,20 @@ print()
 print("func block(z, a, b *[128]uint64) {")
 
 def G(a, b, c, d):
-    print("\t%s = %s + %s" % (a, a, b))
+    print("\tt = uint64(uint32(%s)) * uint64(uint32(%s))" % (a, b))
+    print("\t%s = %s + %s + t*2" % (a, a, b))
     print("\t%s = %s ^ %s" % (d, d, a))
     print("\t%s = %s>>32 | %s<<32" % (d, d, d))
-    print("\t%s = %s + %s" % (c, c, d))
+    print("\tt = uint64(uint32(%s)) * uint64(uint32(%s))" % (c, d))
+    print("\t%s = %s + %s + t*2" % (c, c, d))
     print("\t%s = %s ^ %s" % (b, b, c))
     print("\t%s = %s>>24 | %s<<40" % (b, b, b))
-    print("\t%s = %s + %s" % (a, a, b))
+    print("\tt = uint64(uint32(%s)) * uint64(uint32(%s))" % (a, b))
+    print("\t%s = %s + %s + t*2" % (a, a, b))
     print("\t%s = %s ^ %s" % (d, d, a))
     print("\t%s = %s>>16 | %s<<48" % (d, d, d))
-    print("\t%s = %s + %s" % (c, c, d))
+    print("\tt = uint64(uint32(%s)) * uint64(uint32(%s))" % (c, d))
+    print("\t%s = %s + %s + t*2" % (c, c, d))
     print("\t%s = %s ^ %s" % (b, b, c))
     print("\t%s = %s>>63 | %s<<1" % (b, b, b))
 
@@ -28,6 +32,7 @@ def P():
 
 for i in range(16):
     print("\tvar v%d uint64" % i)
+print("\tvar t uint64")
 print()
 
 for b in range(0, 128, 16):
