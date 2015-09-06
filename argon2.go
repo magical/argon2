@@ -200,7 +200,7 @@ func index(rand uint64, q, g, p, k, slice, lane, i uint32, t *testing.T) (rslice
 }
 
 func blake2b_long(out, in []byte) {
-	if len(out) < blake2b.Size {
+	if len(out) <= blake2b.Size {
 		h, err := blake2b.New(&blake2b.Config{Size: uint8(len(out))})
 		if err != nil {
 			panic(err)
@@ -213,7 +213,6 @@ func blake2b_long(out, in []byte) {
 
 	var buf [64]byte
 	h := blake2b.New512()
-	h.Reset()
 	write32(h, uint32(len(out)))
 	h.Write(in)
 	h.Sum(buf[:0])
@@ -225,10 +224,17 @@ func blake2b_long(out, in []byte) {
 		h.Sum(buf[:0])
 		copy(out[n:], buf[:32])
 	}
-	h.Reset()
+	if len(out)-n < 64 {
+		var err error
+		h, err = blake2b.New(&blake2b.Config{Size: uint8(len(out) - n)})
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		h.Reset()
+	}
 	h.Write(buf[:])
-	h.Sum(buf[:0])
-	copy(out[n:], buf[:])
+	h.Sum(out[n:n])
 }
 
 func write32(h hash.Hash, v uint32) (n int, err error) {
