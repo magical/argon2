@@ -99,6 +99,18 @@ func TestArgon(t *testing.T) {
 	}
 }
 
+func TestAllocs(t *testing.T) {
+	pw := repeat(0x0, 16)
+	salt := repeat(0x1, 8)
+	out := make([]byte, 32)
+	allocs := testing.AllocsPerRun(100, func() {
+		argon2(out, pw, salt, nil, nil, 4, 32, 3, nil)
+	})
+	if allocs > 6 {
+		t.Errorf("%v allocs, want <=6", allocs)
+	}
+}
+
 func benchArgon(b *testing.B, par uint8, mem, n uint32) {
 	msg := repeat(0x0, 16)
 	salt := repeat(0x1, 8)

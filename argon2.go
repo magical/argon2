@@ -8,6 +8,7 @@ import (
 )
 
 const version uint32 = 0x10
+const mode = 0 // Argon2d
 
 /*
 
@@ -39,48 +40,62 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) []byte {
 
 	// Argon2 operates over a matrix of 1024-byte blocks
 	b := make([][128]uint64, m)
-	q := m / p
-	g := q / 4
+	q := m / p // length of each lane
+	g := q / 4 // length of each segment
+
+	var scratch [72]byte
+	var btmp [1024]byte
 
 	// Compute a hash of all the input parameters
-	var buf [72]byte
-	var h0 [1024]byte
-
 	h := blake2b.New512()
-	write32(h, p)
-	write32(h, uint32(len(output)))
-	write32(h, m0)
-	write32(h, n)
-	write32(h, version)
-	write32(h, 0) // y = argon2d
-	write32(h, uint32(len(P)))
+	lh := newLongHash(h)
+
+	put32(scratch[0:4], p)
+	put32(scratch[4:8], uint32(len(output)))
+	put32(scratch[8:12], m0)
+	put32(scratch[12:16], n)
+	put32(scratch[16:20], version)
+	put32(scratch[20:24], mode)
+	h.Write(scratch[:24])
+
+	put32(scratch[0:4], uint32(len(P)))
+	h.Write(scratch[0:4])
 	h.Write(P)
-	write32(h, uint32(len(S)))
+
+	put32(scratch[0:4], uint32(len(S)))
+	h.Write(scratch[0:4])
 	h.Write(S)
-	write32(h, uint32(len(K)))
+
+	put32(scratch[0:4], uint32(len(K)))
+	h.Write(scratch[0:4])
 	h.Write(K)
-	write32(h, uint32(len(X)))
+
+	put32(scratch[0:4], uint32(len(X)))
+	h.Write(scratch[0:4])
 	h.Write(X)
-	h.Sum(buf[:0])
+
+	h.Sum(scratch[:0])
 	h.Reset()
 
 	// Use the hash to initialize the first two columns of the matrix
 	for lane := uint32(0); lane < p; lane++ {
-		buf[68] = uint8(lane)
-		buf[69] = uint8(lane >> 8)
-		buf[70] = uint8(lane >> 16)
-		buf[71] = uint8(lane >> 24)
+		// scratch[0:64] is the parameter hash
+		put32(scratch[64:], 0)
+		put32(scratch[68:], lane)
 
-		buf[64] = 0
-		blake2b_long(h0[:], buf[:72])
+		lh.Init(len(btmp))
+		lh.Write(scratch[:72])
+		lh.Hash(btmp[:])
 		for i := range b[0] {
-			b[lane*q+0][i] = read64(h0[i*8:])
+			b[lane*q+0][i] = read64(btmp[i*8:])
 		}
 
-		buf[64] = 1
-		blake2b_long(h0[:], buf[:72])
+		scratch[64] = 1
+		lh.Init(len(btmp))
+		lh.Write(scratch[:72])
+		lh.Hash(btmp[:])
 		for i := range b[0] {
-			b[lane*q+1][i] = read64(h0[i*8:])
+			b[lane*q+1][i] = read64(btmp[i*8:])
 		}
 	}
 
@@ -90,11 +105,14 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) []byte {
 		t.Logf("Nonce[%d]: % x", len(S), S)
 		t.Logf("Secret[%d]: % x", len(K), K)
 		t.Logf("Associated data[%d]: % x", len(X), X)
-		t.Logf("Input hash: % x", buf[:64])
+		t.Logf("Input hash: % x", scratch[:64])
 	}
 
-	for i := range buf {
-		buf[i] = 0
+	for i := range scratch {
+		scratch[i] = 0
+	}
+	for i := range btmp {
+		btmp[i] = 0
 	}
 
 	// Get down to business
@@ -140,16 +158,21 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) []byte {
 
 	// Output
 	for i, v := range b[m-1] {
-		h0[i*8] = uint8(v)
-		h0[i*8+1] = uint8(v >> 8)
-		h0[i*8+2] = uint8(v >> 16)
-		h0[i*8+3] = uint8(v >> 24)
-		h0[i*8+4] = uint8(v >> 32)
-		h0[i*8+5] = uint8(v >> 40)
-		h0[i*8+6] = uint8(v >> 48)
-		h0[i*8+7] = uint8(v >> 56)
+		btmp[i*8] = uint8(v)
+		btmp[i*8+1] = uint8(v >> 8)
+		btmp[i*8+2] = uint8(v >> 16)
+		btmp[i*8+3] = uint8(v >> 24)
+		btmp[i*8+4] = uint8(v >> 32)
+		btmp[i*8+5] = uint8(v >> 40)
+		btmp[i*8+6] = uint8(v >> 48)
+		btmp[i*8+7] = uint8(v >> 56)
 	}
-	blake2b_long(output, h0[:])
+	if t != nil {
+		t.Logf("Final block: %x", btmp[:])
+	}
+	lh.Init(len(output))
+	lh.Write(btmp[:])
+	lh.Hash(output)
 	if t != nil {
 		t.Logf("Output: % X", output)
 	}
@@ -199,51 +222,72 @@ func index(rand uint64, q, g, p, k, slice, lane, i uint32, t *testing.T) (rslice
 	return rslice, rlane, ri
 }
 
-func blake2b_long(out, in []byte) {
-	if len(out) <= blake2b.Size {
-		h, err := blake2b.New(&blake2b.Config{Size: uint8(len(out))})
-		if err != nil {
-			panic(err)
-		}
-		write32(h, uint32(len(out)))
-		h.Write(in)
-		h.Sum(out[:0])
+type longHash struct {
+	buf [64]uint8
+	h   hash.Hash
+	h0  hash.Hash // large hash
+	h1  hash.Hash // small hash
+	n   int
+}
+
+func newLongHash(h hash.Hash) *longHash {
+	return &longHash{h: h}
+}
+
+// Init readies longHash for an output of length n.
+func (lh *longHash) Init(n int) {
+	lh.n = n
+	lh.h.Reset()
+	lh.h0 = lh.h
+	lh.h1 = lh.h
+	var err error
+	if n < 64 {
+		lh.h0, err = blake2b.New(&blake2b.Config{Size: uint8(n)})
+	} else if n%64 != 0 {
+		n := 33 + (n+31)%32
+		lh.h1, err = blake2b.New(&blake2b.Config{Size: uint8(n)})
+	}
+	if err != nil {
+		panic(err)
+	}
+	put32(lh.buf[:4], uint32(n))
+	lh.Write(lh.buf[:4])
+}
+
+func (lh *longHash) Write(b []byte) {
+	lh.h0.Write(b)
+}
+
+func (lh *longHash) Hash(out []byte) {
+	if len(out) != lh.n {
+		panic("argon2: wrong output length in longHash")
+	}
+
+	if len(out) <= 64 {
+		lh.h0.Sum(out[:0])
 		return
 	}
 
-	var buf [64]byte
-	h := blake2b.New512()
-	write32(h, uint32(len(out)))
-	h.Write(in)
-	h.Sum(buf[:0])
-	copy(out, buf[:32])
-	var n int
-	for n = 32; n < len(out)-64; n += 32 {
-		h.Reset()
-		h.Write(buf[:])
-		h.Sum(buf[:0])
-		copy(out[n:], buf[:32])
+	lh.h0.Sum(lh.buf[:0])
+	copy(out, lh.buf[:32])
+	for out = out[32:]; len(out) > 64; out = out[32:] {
+		lh.h0.Reset()
+		lh.h0.Write(lh.buf[:])
+		lh.h0.Sum(lh.buf[:0])
+		copy(out, lh.buf[:32])
 	}
-	if len(out)-n < 64 {
-		var err error
-		h, err = blake2b.New(&blake2b.Config{Size: uint8(len(out) - n)})
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		h.Reset()
+	if lh.h0 == lh.h1 {
+		lh.h1.Reset()
 	}
-	h.Write(buf[:])
-	h.Sum(out[n:n])
+	lh.h1.Write(lh.buf[:])
+	lh.h1.Sum(out[:0])
 }
 
-func write32(h hash.Hash, v uint32) (n int, err error) {
-	var b [4]byte
+func put32(b []uint8, v uint32) {
 	b[0] = uint8(v)
 	b[1] = uint8(v >> 8)
 	b[2] = uint8(v >> 16)
 	b[3] = uint8(v >> 24)
-	return h.Write(b[:])
 }
 
 func read64(b []uint8) uint64 {
