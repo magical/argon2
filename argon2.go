@@ -25,7 +25,7 @@ inputs:
 
 */
 
-func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) []byte {
+func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 	if p == 0 || m == 0 || n == 0 {
 		panic("argon: internal error: invalid params")
 	}
@@ -176,7 +176,6 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) []byte {
 	if t != nil {
 		t.Logf("Output: % X", output)
 	}
-	return output
 }
 
 func index(rand uint64, q, g, p, k, slice, lane, i uint32, t *testing.T) (rslice, rlane, ri uint32) {
