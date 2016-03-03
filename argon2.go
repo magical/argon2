@@ -7,7 +7,7 @@ import (
 	"github.com/dchest/blake2b"
 )
 
-const version uint32 = 0x10
+const version uint32 = 0x13
 const mode = 0 // Argon2d
 
 /*
@@ -45,6 +45,7 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 
 	var scratch [72]byte
 	var btmp [1024]byte
+	var btmp2 [128]uint64
 
 	// Compute a hash of all the input parameters
 	h := blake2b.New512()
@@ -138,7 +139,7 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 					rslice, rlane, ri := index(rand, q, g, p, k, slice, lane, i, t)
 					j0 := rlane*q + rslice*g + ri
 
-					block(&b[j], &b[prev], &b[j0])
+					block(&b[j], &btmp2, &b[prev], &b[j0])
 				}
 			}
 		}

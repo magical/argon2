@@ -1,8 +1,8 @@
-// Package argon2 implements the Argon2 password hashing scheme
-// designed by Alex Biryukov, Daniel Dinu, and Dmitry Khovratovich;
-// and specified in the document
+// Package argon2 implements version 1.3 of the Argon2 password hashing scheme
+// designed by Alex Biryukov, Daniel Dinu, and Dmitry Khovratovich,
+// as specified in the document
 //
-//     https://github.com/khovratovich/Argon2/raw/f80a42fdb51e8cd615f9388baad1401b9da66103/Argon2.pdf
+//     https://github.com/P-H-C/phc-winner-argon2/raw/54617af02de0055b90e39c4204058bb9a84c2b78/argon2-specs.pdf
 //
 // Warning: This package is currently unstable; Argon2 has not yet been
 // finalized and is still undergoing design tweaks.

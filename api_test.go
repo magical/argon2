@@ -25,7 +25,7 @@ func ExampleKey() {
 	}
 
 	fmt.Printf("%x", key)
-	// Output: c15a7a43959a834f77714805434799ca8efdeb26ad0e1acda206af846a5cef29
+	// Output: c5dd631f4e715853e0354326c56f7c3aac983e5d86f7fb02f935899c38690f9e
 }
 
 func TestKeyErr(t *testing.T) {
