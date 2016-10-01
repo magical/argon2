@@ -1,1 +1,6 @@
 language: go
+go:
+  - 1.4
+  - 1.7
+  - tip
+script: go test ./...
