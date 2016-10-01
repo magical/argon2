@@ -1,18 +1,24 @@
 print("package argon2")
 print()
-print("func block(z, a, b *[128]uint64) {")
-
+print("func block(z, t, a, b *[128]uint64) {")
+print("\t// compute z = z ^ a^b ^ P(a^b)")
+print()
+print("\t// t = a ^ b")
 for i in range(128):
-    print("\tz[%d] = a[%d] ^ b[%d]" % (i, i, i))
+    print("\tt[%d] = a[%d] ^ b[%d]" % (i, i, i))
 
+print()
+print("\t// t = P(t)")
 for b in range(0, 128, 16):
-    print("\t_P(" + ", ".join("&z[%d]" % i for i in range(b, b+16)) + ")")
+    print("\t_P(" + ", ".join("&t[%d]" % i for i in range(b, b+16)) + ")")
 
 for b in range(0, 16, 2):
-    print("\t_P(" + ", ".join("&z[%d], &z[%d]" % (i, i+1) for i in range(b, 128, 16)) + ")")
+    print("\t_P(" + ", ".join("&t[%d], &t[%d]" % (i, i+1) for i in range(b, 128, 16)) + ")")
 
+print()
+print("\t// z = z ^ a^b ^ t")
 for i in range(128):
-    print("\tz[%d] ^= a[%d] ^ b[%d]" % (i, i, i))
+    print("\tz[%d] ^= a[%d] ^ b[%d] ^ t[%d]" % (i, i, i, i))
 
 print("}")
 print()
