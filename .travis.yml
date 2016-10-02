@@ -17,7 +17,7 @@ after_success:
 matrix:
   include:
   # no code coverage for go 1.2
-  - go: 1.2.1
+  - go: 1.2.2
     install: go get ./...
     script: go test -v ./...
     after_success: 'true'
