@@ -9,7 +9,7 @@ go:
   - tip
 install:
   - go get ./...
-  - go tool -n cover >/dev/null 2>&1 || go get golang.org/x/tools/cmd/cover
+  - go tool -n cover || go get -v golang.org/x/tools/cmd/cover
 script:
   - go test -v -race -coverprofile=coverage.txt -covermode=count ./...
 after_success:
