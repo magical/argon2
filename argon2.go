@@ -284,6 +284,7 @@ func (lh *longHash) Hash(out []byte) {
 }
 
 func put32(b []uint8, v uint32) {
+	_ = b[3]
 	b[0] = uint8(v)
 	b[1] = uint8(v >> 8)
 	b[2] = uint8(v >> 16)
@@ -291,6 +292,7 @@ func put32(b []uint8, v uint32) {
 }
 
 func read64(b []uint8) uint64 {
+	_ = b[7]
 	return uint64(b[0]) |
 		uint64(b[1])<<8 |
 		uint64(b[2])<<16 |
