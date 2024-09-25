@@ -28,7 +28,7 @@ const (
 // The salt must be at least 8 bytes long.
 //
 // Mem is the amount of memory to use in kibibytes.
-// Mem must be at least 8*p, and will be rounded to a multiple of 4*p.
+// Mem must be at least 8*par, and will be rounded to a multiple of 4*par.
 func Key(password, salt []byte, n, par int, mem int64, keyLen int) ([]byte, error) {
 	if int64(len(password)) > maxPassword {
 		return nil, errors.New("argon: password too long")
