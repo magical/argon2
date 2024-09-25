@@ -17,7 +17,7 @@ func repeat(v uint8, n int) []byte {
 // Runs argon2 with logging enabled, for debugging purposes
 func TestDebug(t *testing.T) {
 	var out [8]uint8
-	argon2(out[:], repeat(0, 16), repeat(1, 8), nil, nil, 1, 8, 3, t)
+	argon2(out[:], repeat(0, 16), repeat(1, 8), nil, nil, 1, 8, 3, t.Logf)
 }
 
 // Runs the test vector from the official repository
@@ -28,7 +28,7 @@ func TestArgon_Vector(t *testing.T) {
 	data := repeat(0x4, 12)
 	want := []byte{0x51, 0x2b, 0x39, 0x1b, 0x6f, 0x11, 0x62, 0x97, 0x53, 0x71, 0xd3, 0x09, 0x19, 0x73, 0x42, 0x94, 0xf8, 0x68, 0xe3, 0xbe, 0x39, 0x84, 0xf3, 0xc1, 0xa1, 0x3a, 0x4d, 0xb9, 0xfa, 0xbe, 0x4a, 0xcb}
 	out := make([]byte, len(want))
-	argon2(out, msg, salt, key, data, 4, 32, 3, t)
+	argon2(out, msg, salt, key, data, 4, 32, 3, t.Logf)
 	if !bytes.Equal(want, out) {
 		t.Errorf("got % x, want % x\n", out, want)
 	}

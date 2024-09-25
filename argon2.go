@@ -2,7 +2,6 @@ package argon2
 
 import (
 	"hash"
-	"testing"
 
 	"github.com/dchest/blake2b"
 )
@@ -25,7 +24,9 @@ inputs:
 
 */
 
-func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
+type logFunc func(string, ...interface{})
+
+func argon2(output, P, S, K, X []byte, p, m, n uint32, logf logFunc) {
 	if p == 0 || m == 0 || n == 0 {
 		panic("argon: internal error: invalid params")
 	}
@@ -100,13 +101,13 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 		}
 	}
 
-	if t != nil {
-		t.Logf("Iterations: %d, Memory: %d KiB, Parallelism: %d lanes, Tag length: %d bytes", n, m, p, len(output))
-		t.Logf("Password[%d]: % x", len(P), P)
-		t.Logf("Nonce[%d]: % x", len(S), S)
-		t.Logf("Secret[%d]: % x", len(K), K)
-		t.Logf("Associated data[%d]: % x", len(X), X)
-		t.Logf("Input hash: % x", scratch[:64])
+	if logf != nil {
+		logf("Iterations: %d, Memory: %d KiB, Parallelism: %d lanes, Tag length: %d bytes", n, m, p, len(output))
+		logf("Password[%d]: % x", len(P), P)
+		logf("Nonce[%d]: % x", len(S), S)
+		logf("Secret[%d]: % x", len(K), K)
+		logf("Associated data[%d]: % x", len(X), X)
+		logf("Input hash: % x", scratch[:64])
 	}
 
 	for i := range scratch {
@@ -118,9 +119,9 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 
 	// Get down to business
 	for k := uint32(0); k < n; k++ {
-		if t != nil {
-			t.Log()
-			t.Logf(" After pass %d:", k)
+		if logf != nil {
+			logf("")
+			logf(" After pass %d:", k)
 		}
 		for slice := uint32(0); slice < 4; slice++ {
 			for lane := uint32(0); lane < p; lane++ {
@@ -136,16 +137,16 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 					}
 
 					rand := b[prev][0]
-					rslice, rlane, ri := index(rand, q, g, p, k, slice, lane, i, t)
+					rslice, rlane, ri := index(rand, q, g, p, k, slice, lane, i, logf)
 					j0 := rlane*q + rslice*g + ri
 
 					block(&b[j], &btmp2, &b[prev], &b[j0])
 				}
 			}
 		}
-		if t != nil {
+		if logf != nil {
 			for i := range b {
-				t.Logf("  Block %.4d [0]: %x", i, b[i][0])
+				logf("  Block %.4d [0]: %x", i, b[i][0])
 			}
 		}
 	}
@@ -168,18 +169,18 @@ func argon2(output, P, S, K, X []byte, p, m, n uint32, t *testing.T) {
 		btmp[i*8+6] = uint8(v >> 48)
 		btmp[i*8+7] = uint8(v >> 56)
 	}
-	if t != nil {
-		t.Logf("Final block: %x", btmp[:])
+	if logf != nil {
+		logf("Final block: %x", btmp[:])
 	}
 	lh.Init(len(output))
 	lh.Write(btmp[:])
 	lh.Hash(output)
-	if t != nil {
-		t.Logf("Output: % X", output)
+	if logf != nil {
+		logf("Output: % X", output)
 	}
 }
 
-func index(rand uint64, q, g, p, k, slice, lane, i uint32, t *testing.T) (rslice, rlane, ri uint32) {
+func index(rand uint64, q, g, p, k, slice, lane, i uint32, logf logFunc) (rslice, rlane, ri uint32) {
 	rlane = uint32(rand>>32) % p
 
 	var start, max uint32
@@ -213,10 +214,10 @@ func index(rand uint64, q, g, p, k, slice, lane, i uint32, t *testing.T) (rslice
 	phi = phi * uint64(max) >> 32
 	ri = uint32((uint64(start) + uint64(max) - 1 - phi) % uint64(q))
 
-	if t != nil {
+	if logf != nil {
 		i0 := lane*q + slice*g + i
 		j0 := rlane*q + ri
-		t.Logf("  i = %d(%d,%d,%d), rand = %d, max = %d, start = %d, phi = %d, j = %d(%d,%d,%d)", i0, lane, slice, i, rand, max, start, phi, j0, rlane, rslice, ri)
+		logf("  i = %d(%d,%d,%d), rand = %d, max = %d, start = %d, phi = %d, j = %d(%d,%d,%d)", i0, lane, slice, i, rand, max, start, phi, j0, rlane, rslice, ri)
 	}
 
 	return rslice, rlane, ri
